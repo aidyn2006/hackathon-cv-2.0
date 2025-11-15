@@ -3,108 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Детекция QR-кодов, подписей и штампов</title>
+    <title>Детекция документов - AI Detection System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔍 Детекция документов</h1>
-            <p>Загрузите PDF файл для обнаружения QR-кодов, подписей и штампов</p>
+            <div class="header-content">
+                <h1>🤖 AI Детекция Документов</h1>
+                <p>Автоматическое обнаружение подписей, штампов и QR-кодов с использованием YOLO</p>
+                <div class="badge-container">
+                    <span class="badge badge-fast">⚡ Быстрый режим</span>
+                    <span class="badge badge-ai">🧠 AI-powered</span>
+                </div>
+            </div>
         </header>
 
         <div class="upload-section">
             <div class="upload-area" id="uploadArea">
                 <input type="file" id="fileInput" accept=".pdf" hidden>
                 <div class="upload-content">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="17 8 12 3 7 8"></polyline>
                         <line x1="12" y1="3" x2="12" y2="15"></line>
                     </svg>
-                    <p>Перетащите PDF файл сюда или <span class="link">выберите файл</span></p>
-                    <p class="hint">Максимальный размер: 16MB</p>
+                    <h3>Загрузите PDF документ</h3>
+                    <p>Перетащите файл сюда или <span class="link">выберите файл</span></p>
+                    <p class="hint">Поддерживается: PDF • Макс. размер: 16MB</p>
                 </div>
             </div>
         </div>
 
         <div class="loading" id="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Обработка документа...</p>
+            <div class="loading-animation">
+                <div class="spinner"></div>
+                <div class="loading-stages">
+                    <p id="loadingText">Загрузка документа...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="loading-hint">⚡ Быстрый режим активен</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Общая статистика -->
+        <div class="summary-stats" id="summaryStats" style="display: none;">
+            <h2>📊 Общая статистика</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📄</div>
+                    <div class="stat-value" id="totalPages">0</div>
+                    <div class="stat-label">Страниц</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-value" id="totalDetections">0</div>
+                    <div class="stat-label">Всего объектов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✍️</div>
+                    <div class="stat-value" id="totalSignatures">0</div>
+                    <div class="stat-label">Подписей</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏷️</div>
+                    <div class="stat-value" id="totalStamps">0</div>
+                    <div class="stat-label">Штампов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📱</div>
+                    <div class="stat-value" id="totalQR">0</div>
+                    <div class="stat-label">QR-кодов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⭐</div>
+                    <div class="stat-value" id="avgQuality">0%</div>
+                    <div class="stat-label">Качество</div>
+                </div>
+            </div>
         </div>
 
         <div class="results" id="results" style="display: none;">
-            <h2>Результаты детекции</h2>
+            <h2>🔍 Результаты детекции</h2>
             <div id="resultsContainer"></div>
         </div>
 
         <div class="error" id="error" style="display: none;"></div>
     </div>
 
+    <!-- Модальное окно для увеличенного просмотра -->
+    <div class="modal" id="imageModal" style="display: none;">
+        <div class="modal-overlay" onclick="closeModal()"></div>
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <img id="modalImage" src="" alt="Увеличенное изображение">
+        </div>
+    </div>
+
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+        const progressFill = document.getElementById('progressFill');
+        const summaryStats = document.getElementById('summaryStats');
         const results = document.getElementById('results');
         const resultsContainer = document.getElementById('resultsContainer');
         const error = document.getElementById('error');
 
-        // Проверка наличия элементов
-        if (!uploadArea || !fileInput || !loading || !results || !resultsContainer || !error) {
-            console.error('Не все необходимые элементы найдены в DOM');
-        }
+        let loadingProgress = 0;
+        let loadingInterval;
 
         // Клик по области загрузки
-        if (uploadArea && fileInput) {
-            uploadArea.addEventListener('click', () => fileInput.click());
-        }
+        uploadArea.addEventListener('click', () => fileInput.click());
 
         // Перетаскивание файла
-        if (uploadArea) {
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
 
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
 
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    handleFile(files[0]);
-                }
-            });
-        }
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
 
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length > 0) {
-                    handleFile(e.target.files[0]);
-                }
-            });
-        }
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
 
         function handleFile(file) {
             if (!file.type.includes('pdf')) {
-                showError('Пожалуйста, загрузите PDF файл');
+                showError('❌ Пожалуйста, загрузите PDF файл');
                 return;
             }
 
             if (file.size > 16 * 1024 * 1024) {
-                showError('Файл слишком большой. Максимальный размер: 16MB');
+                showError('❌ Файл слишком большой. Максимальный размер: 16MB');
                 return;
             }
 
             const formData = new FormData();
             formData.append('file', file);
 
-            if (loading) loading.style.display = 'block';
-            if (results) results.style.display = 'none';
-            if (error) error.style.display = 'none';
+            startLoading();
 
             fetch('/upload', {
                 method: 'POST',
@@ -112,101 +166,285 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (loading) loading.style.display = 'none';
+                stopLoading();
                 if (data.success) {
-                    displayResults(data.results);
+                    displayResults(data.results, data.summary);
                 } else {
-                    showError(data.error || 'Произошла ошибка при обработке файла');
+                    showError('❌ ' + (data.error || 'Произошла ошибка при обработке файла'));
                 }
             })
             .catch(err => {
-                if (loading) loading.style.display = 'none';
-                if (results) {
-                    results.style.display = 'none';
-                }
-                showError('Ошибка соединения с сервером: ' + err.message);
+                stopLoading();
+                showError('❌ Ошибка соединения с сервером: ' + err.message);
             });
         }
 
-        function displayResults(data) {
-            if (!resultsContainer) {
-                console.error('resultsContainer не найден');
-                return;
-            }
+        function startLoading() {
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            summaryStats.style.display = 'none';
+            error.style.display = 'none';
             
-            if (!data || !Array.isArray(data)) {
-                showError('Некорректные данные от сервера');
-                return;
-            }
+            loadingProgress = 0;
+            const stages = [
+                'Загрузка документа...',
+                'Конвертация PDF в изображения...',
+                'Применение препроцессинга...',
+                'Запуск YOLO детекции...',
+                'Пост-обработка результатов...',
+                'Финализация...'
+            ];
             
+            let stage = 0;
+            loadingInterval = setInterval(() => {
+                loadingProgress += Math.random() * 15;
+                if (loadingProgress > 95) loadingProgress = 95;
+                
+                if (loadingProgress > stage * 15 && stage < stages.length) {
+                    loadingText.textContent = stages[stage];
+                    stage++;
+                }
+                
+                progressFill.style.width = loadingProgress + '%';
+            }, 500);
+        }
+
+        function stopLoading() {
+            clearInterval(loadingInterval);
+            loadingProgress = 100;
+            progressFill.style.width = '100%';
+            setTimeout(() => {
+                loading.style.display = 'none';
+            }, 300);
+        }
+
+        function displayResults(data, summary) {
             resultsContainer.innerHTML = '';
+            
+            // Показываем общую статистику
+            if (summary) {
+                document.getElementById('totalPages').textContent = summary.total_pages || 0;
+                document.getElementById('totalDetections').textContent = summary.total_detections || 0;
+                
+                // Подсчет по типам
+                let signatures = 0, stamps = 0, qr = 0;
+                data.forEach(page => {
+                    page.yolo_detections.forEach(det => {
+                        const className = det.class.toLowerCase();
+                        if (className.includes('подпись') || className.includes('signature')) {
+                            signatures++;
+                        } else if (className.includes('штамп') || className.includes('stamp')) {
+                            stamps++;
+                        }
+                    });
+                    qr += page.qr_codes.length;
+                });
+                
+                document.getElementById('totalSignatures').textContent = signatures;
+                document.getElementById('totalStamps').textContent = stamps;
+                document.getElementById('totalQR').textContent = qr;
+                
+                const quality = summary.average_quality || 0;
+                document.getElementById('avgQuality').textContent = Math.round(quality * 100) + '%';
+                
+                summaryStats.style.display = 'block';
+            }
             
             data.forEach((pageResult, index) => {
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'page-result';
                 
+                // Заголовок страницы
                 const pageHeader = document.createElement('div');
                 pageHeader.className = 'page-header';
-                pageHeader.innerHTML = `<h3>Страница ${pageResult.page}</h3>`;
+                pageHeader.innerHTML = `
+                    <h3>📄 Страница ${pageResult.page}</h3>
+                    <div class="page-stats-inline">
+                        <span class="badge">🎯 ${pageResult.stats.total_detections} объектов</span>
+                        <span class="badge">📱 ${pageResult.stats.total_qr_codes} QR</span>
+                        <span class="badge">⭐ ${Math.round(pageResult.quality_score * 100)}%</span>
+                    </div>
+                `;
                 
-                const imageDiv = document.createElement('div');
-                imageDiv.className = 'result-image';
-                const img = document.createElement('img');
-                img.src = 'data:image/png;base64,' + pageResult.image;
-                img.alt = `Страница ${pageResult.page}`;
-                imageDiv.appendChild(img);
+                // Контейнер для изображений side-by-side
+                const imagesContainer = document.createElement('div');
+                imagesContainer.className = 'images-container';
+                imagesContainer.id = `images-${index}`;
                 
+                // Переключатель
+                const switcherDiv = document.createElement('div');
+                switcherDiv.className = 'image-switcher';
+                switcherDiv.innerHTML = `
+                    <button class="switch-btn active" onclick="showImage(${index}, 'processed')">
+                        🔍 С детекциями
+                    </button>
+                    <button class="switch-btn" onclick="showImage(${index}, 'original')">
+                        📄 Оригинал
+                    </button>
+                `;
+                
+                // Обработанное изображение
+                const processedDiv = document.createElement('div');
+                processedDiv.className = 'image-box';
+                processedDiv.id = `processed-${index}`;
+                processedDiv.innerHTML = `
+                    <img src="data:image/png;base64,${pageResult.image}" 
+                         alt="Обработанная страница ${pageResult.page}"
+                         onclick="openModal(this.src)">
+                    <div class="image-overlay">Нажмите для увеличения</div>
+                `;
+                
+                // Оригинальное изображение
+                const originalDiv = document.createElement('div');
+                originalDiv.className = 'image-box';
+                originalDiv.id = `original-${index}`;
+                originalDiv.style.display = 'none';
+                originalDiv.innerHTML = `
+                    <img src="data:image/png;base64,${pageResult.original_image}" 
+                         alt="Оригинальная страница ${pageResult.page}"
+                         onclick="openModal(this.src)">
+                    <div class="image-overlay">Нажмите для увеличения</div>
+                `;
+                
+                imagesContainer.appendChild(switcherDiv);
+                imagesContainer.appendChild(processedDiv);
+                imagesContainer.appendChild(originalDiv);
+                
+                // Детальная статистика
                 const statsDiv = document.createElement('div');
-                statsDiv.className = 'stats';
+                statsDiv.className = 'detailed-stats';
                 
-                // Статистика YOLO детекций
-                const yoloStats = {};
+                // YOLO детекции
+                const detectionsByClass = {};
                 pageResult.yolo_detections.forEach(det => {
                     const className = det.class;
-                    yoloStats[className] = (yoloStats[className] || 0) + 1;
+                    if (!detectionsByClass[className]) {
+                        detectionsByClass[className] = [];
+                    }
+                    detectionsByClass[className].push(det);
                 });
                 
-                let statsHTML = '<div class="stats-section"><h4>Обнаруженные объекты:</h4><ul>';
-                Object.entries(yoloStats).forEach(([className, count]) => {
-                    statsHTML += `<li><strong>${className}</strong>: ${count}</li>`;
-                });
-                statsHTML += '</ul></div>';
+                let statsHTML = '<div class="stats-columns">';
                 
-                // Статистика QR-кодов
-                if (pageResult.qr_codes.length > 0) {
-                    statsHTML += '<div class="stats-section"><h4>QR-коды:</h4><ul>';
-                    pageResult.qr_codes.forEach((qr, idx) => {
-                        statsHTML += `<li>QR-код ${idx + 1}: ${qr.data.substring(0, 50)}${qr.data.length > 50 ? '...' : ''}</li>`;
+                // Левая колонка - YOLO детекции
+                statsHTML += '<div class="stats-column">';
+                statsHTML += '<h4>🎯 Обнаруженные объекты</h4>';
+                
+                if (Object.keys(detectionsByClass).length > 0) {
+                    Object.entries(detectionsByClass).forEach(([className, detections]) => {
+                        const avgConf = (detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length * 100).toFixed(1);
+                        const icon = className.toLowerCase().includes('подпись') || className.toLowerCase().includes('signature') 
+                            ? '✍️' 
+                            : className.toLowerCase().includes('штамп') || className.toLowerCase().includes('stamp')
+                            ? '🏷️'
+                            : '📦';
+                        
+                        statsHTML += `
+                            <div class="detection-item">
+                                <span class="detection-icon">${icon}</span>
+                                <span class="detection-name">${className}</span>
+                                <span class="detection-count">${detections.length}</span>
+                                <span class="detection-conf">${avgConf}%</span>
+                            </div>
+                        `;
                     });
-                    statsHTML += '</ul></div>';
+                } else {
+                    statsHTML += '<p class="no-data">Объекты не найдены</p>';
                 }
+                
+                statsHTML += '</div>';
+                
+                // Правая колонка - QR-коды
+                statsHTML += '<div class="stats-column">';
+                statsHTML += '<h4>📱 QR-коды</h4>';
+                
+                if (pageResult.qr_codes.length > 0) {
+                    pageResult.qr_codes.forEach((qr, idx) => {
+                        const validIcon = qr.valid ? '✅' : '⚠️';
+                        const validClass = qr.valid ? 'valid' : 'invalid';
+                        const data = qr.data.length > 50 ? qr.data.substring(0, 50) + '...' : qr.data;
+                        
+                        statsHTML += `
+                            <div class="qr-item ${validClass}">
+                                <span class="qr-icon">${validIcon}</span>
+                                <div class="qr-data">
+                                    <div class="qr-number">QR-код #${idx + 1}</div>
+                                    <div class="qr-content">${data}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    statsHTML += '<p class="no-data">QR-коды не найдены</p>';
+                }
+                
+                statsHTML += '</div>';
+                statsHTML += '</div>';
                 
                 statsDiv.innerHTML = statsHTML;
                 
                 pageDiv.appendChild(pageHeader);
-                pageDiv.appendChild(imageDiv);
+                pageDiv.appendChild(imagesContainer);
                 pageDiv.appendChild(statsDiv);
                 
                 resultsContainer.appendChild(pageDiv);
             });
             
-            if (results) {
-                results.style.display = 'block';
+            results.style.display = 'block';
+            
+            // Плавная прокрутка к результатам
+            setTimeout(() => {
+                summaryStats.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        function showImage(pageIndex, type) {
+            const processedDiv = document.getElementById(`processed-${pageIndex}`);
+            const originalDiv = document.getElementById(`original-${pageIndex}`);
+            const imagesContainer = document.getElementById(`images-${pageIndex}`);
+            const buttons = imagesContainer.querySelectorAll('.switch-btn');
+            
+            if (type === 'processed') {
+                processedDiv.style.display = 'block';
+                originalDiv.style.display = 'none';
+                buttons[0].classList.add('active');
+                buttons[1].classList.remove('active');
+            } else {
+                processedDiv.style.display = 'none';
+                originalDiv.style.display = 'block';
+                buttons[0].classList.remove('active');
+                buttons[1].classList.add('active');
             }
         }
 
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = imageSrc;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
         function showError(message) {
-            if (!error) {
-                console.error('Элемент error не найден:', message);
-                return;
-            }
             error.textContent = message;
             error.style.display = 'block';
             setTimeout(() => {
                 error.style.display = 'none';
             }, 5000);
         }
+
+        // Закрытие модального окна по ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>
-

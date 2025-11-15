@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block page_title %}Upload Document{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="stat-card">
+            <h4 class="mb-4"><i class="bi bi-cloud-upload"></i> Upload Document for Inspection</h4>
+            
+            <div class="upload-area" id="uploadArea" style="border: 3px dashed #2ecc71; border-radius: 15px; padding: 60px; text-align: center; background: #f8f9fa; cursor: pointer;">
+                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" hidden>
+                <i class="bi bi-cloud-arrow-up" style="font-size: 72px; color: #2ecc71;"></i>
+                <h5 class="mt-3">Drag & Drop or Click to Upload</h5>
+                <p class="text-muted">Supported: PDF, PNG, JPG • Max 50MB</p>
+            </div>
+            
+            <div id="uploadProgress" class="mt-4" style="display: none;">
+                <div class="progress" style="height: 30px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; background: #2ecc71;"></div>
+                </div>
+                <p id="progressText" class="text-center mt-2"></p>
+            </div>
+            
+            <div id="results" class="mt-4" style="display: none;">
+                <h5>✅ Processing Complete!</h5>
+                <div id="resultsContent"></div>
+                <div id="imagesPreview" class="mt-4"></div>
+                <a href="{{ url_for('documents_list') }}" class="btn btn-primary-custom mt-3">
+                    View All Documents
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const uploadProgress = document.getElementById('uploadProgress');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const results = document.getElementById('results');
+const resultsContent = document.getElementById('resultsContent');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = '#27ae60';
+    uploadArea.style.background = '#e8f5e9';
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.style.borderColor = '#2ecc71';
+    uploadArea.style.background = '#f8f9fa';
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = '#2ecc71';
+    uploadArea.style.background = '#f8f9fa';
+    if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+    }
+});
+
+function handleFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    uploadProgress.style.display = 'block';
+    uploadArea.style.display = 'none';
+    
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 10;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + '%';
+        progressText.textContent = Math.round(progress) + '% - Processing...';
+    }, 500);
+    
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        progressText.textContent = '100% - Complete!';
+        
+        setTimeout(() => {
+            uploadProgress.style.display = 'none';
+            results.style.display = 'block';
+            
+            const totalDetections = data.results.reduce((sum, p) => sum + p.detections.length, 0);
+            const totalQR = data.results.reduce((sum, p) => sum + p.qr_codes.length, 0);
+            
+            let html = `<div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> Document processed successfully!
+                <br><strong>Document ID:</strong> ${data.document_id}
+                <br><strong>Pages:</strong> ${data.results.length}
+                <br><strong>Total Detections:</strong> ${totalDetections}
+                <br><strong>QR Codes:</strong> ${totalQR}
+            </div>`;
+            
+            resultsContent.innerHTML = html;
+            
+            // Show original and processed images side by side
+            let imagesHtml = '';
+            data.results.forEach((page, idx) => {
+                imagesHtml += `
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="bi bi-file-image"></i> Page ${page.page}</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-center">📄 Original Document</h6>
+                                    <img src="data:image/png;base64,${page.original_image}" 
+                                         class="img-fluid rounded shadow" 
+                                         alt="Original Page ${page.page}"
+                                         style="cursor: pointer; border: 3px solid #6c757d;"
+                                         onclick="window.open(this.src)">
+                                    <p class="text-center text-muted mt-2"><small>Click to enlarge</small></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-center">🔍 With Detections</h6>
+                                    <img src="data:image/png;base64,${page.image}" 
+                                         class="img-fluid rounded shadow" 
+                                         alt="Processed Page ${page.page}"
+                                         style="cursor: pointer; border: 3px solid #2ecc71;"
+                                         onclick="window.open(this.src)">
+                                    <p class="text-center text-muted mt-2"><small>Click to enlarge</small></p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <span class="badge bg-success me-2">
+                                    <i class="bi bi-search"></i> Detections: ${page.detections.length}
+                                </span>
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-qr-code"></i> QR Codes: ${page.qr_codes.length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('imagesPreview').innerHTML = imagesHtml;
+        }, 500);
+    })
+    .catch(error => {
+        clearInterval(progressInterval);
+        alert('Error: ' + error.message);
+        uploadArea.style.display = 'block';
+        uploadProgress.style.display = 'none';
+    });
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Statistics Cards -->
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-file-earmark-text"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ stats.total_documents }}</h3>
+                    <p class="text-muted mb-0">Documents</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-search"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ stats.total_detections }}</h3>
+                    <p class="text-muted mb-0">Detections</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon me-3"><i class="bi bi-percent"></i></div>
+                <div>
+                    <h3 class="mb-0">{{ (stats.average_confidence * 100)|round|int }}%</h3>
+                    <p class="text-muted mb-0">Avg Confidence</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <a href="{{ url_for('upload_page') }}" class="btn btn-primary-custom w-100">
+                <i class="bi bi-cloud-upload"></i> Upload Document
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Detection Types -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="stat-card">
+            <h5 class="mb-3">Detection Types</h5>
+            <div class="row">
+                {% for item in stats.by_type %}
+                <div class="col-md-4 mb-2">
+                    <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                        <span><i class="bi bi-{{ 'pencil' if 'signature' in item.detection_type.lower() else 'bookmark' if 'stamp' in item.detection_type.lower() else 'qr-code' }}"></i> {{ item.detection_type }}</span>
+                        <span class="badge badge-green">{{ item.count }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Documents -->
+<div class="row">
+    <div class="col-12">
+        <div class="stat-card">
+            <h5 class="mb-3">Recent Documents</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Document</th>
+                            <th>Date</th>
+                            <th>Pages</th>
+                            <th>Detections</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documents %}
+                        <tr>
+                            <td>
+                                <i class="bi bi-file-pdf text-danger"></i>
+                                {{ doc.original_filename }}
+                            </td>
+                            <td>{{ doc.upload_date }}</td>
+                            <td>{{ doc.pages }}</td>
+                            <td>
+                                <span class="badge badge-light-green">{{ doc.total_detections }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-success">{{ doc.processing_status }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('document_details', document_id=doc.id) }}" class="btn btn-sm btn-primary-custom">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

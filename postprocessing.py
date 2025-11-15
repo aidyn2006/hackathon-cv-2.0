@@ -276,19 +276,20 @@ def apply_class_specific_filtering(detections):
     filtered = []
     
     class_thresholds = {
-        'подпись': 0.25,    # Более низкий порог для подписей (они слабые)
-        'signature': 0.25,
-        'штамп': 0.35,      # Штампы обычно четче
-        'stamp': 0.35,
-        'qr': 0.4,          # QR должны быть уверенными
-        'default': 0.3      # По умолчанию
+        'подпись': 0.20,    # Более низкий порог для подписей (они слабые)
+        'signature': 0.20,
+        'штамп': 0.20,      # Понижен порог для штампов (было 0.35)
+        'stamp': 0.20,
+        'qr': 0.3,          # Понижен порог для QR
+        'text': 999.0,      # Фильтруем класс Text (не нужен)
+        'default': 0.25     # По умолчанию
     }
     
     for det in detections:
         class_name = det['class'].lower()
         
         # Определяем порог для класса
-        threshold = class_thresholds.get('default')
+        threshold = class_thresholds.get('default', 0.25)
         for key, value in class_thresholds.items():
             if key in class_name:
                 threshold = value
@@ -296,7 +297,10 @@ def apply_class_specific_filtering(detections):
         
         if det['confidence'] >= threshold:
             filtered.append(det)
+        else:
+            logger.info(f"Filtered out: {det['class']} (conf={det['confidence']:.3f} < threshold={threshold})")
     
+    logger.info(f"Class-specific filtering: {len(detections)} -> {len(filtered)} detections")
     return filtered
 
 
@@ -316,10 +320,9 @@ def post_process_detections(detections, image=None, qr_codes=None):
     
     # 1. Применяем класс-специфичную фильтрацию
     processed = apply_class_specific_filtering(detections)
-    logger.info(f"After class-specific filtering: {len(processed)} detections")
     
-    # 2. Удаляем сомнительные детекции (< 0.3 как fallback)
-    processed = filter_low_confidence_detections(processed, min_confidence=0.3)
+    # 2. Удаляем сомнительные детекции (< 0.20 как fallback)
+    processed = filter_low_confidence_detections(processed, min_confidence=0.20)
     logger.info(f"After confidence filtering: {len(processed)} detections")
     
     # 3. Применяем NMS с порогом 0.6

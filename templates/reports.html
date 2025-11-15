@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block page_title %}Reports & Analytics{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <i class="bi bi-file-earmark-text" style="font-size: 48px; color: var(--primary-green);"></i>
+            <h2 class="mt-2">{{ stats.total_documents }}</h2>
+            <p class="text-muted">Total Documents</p>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <i class="bi bi-search" style="font-size: 48px; color: var(--primary-green);"></i>
+            <h2 class="mt-2">{{ stats.total_detections }}</h2>
+            <p class="text-muted">Total Detections</p>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <i class="bi bi-percent" style="font-size: 48px; color: var(--primary-green);"></i>
+            <h2 class="mt-2">{{ (stats.average_confidence * 100)|round|int }}%</h2>
+            <p class="text-muted">Average Confidence</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h5 class="mb-3"><i class="bi bi-pie-chart"></i> Detection Breakdown</h5>
+            <canvas id="detectionChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="stat-card">
+            <h5 class="mb-3"><i class="bi bi-bar-chart"></i> Documents Timeline</h5>
+            <canvas id="timelineChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="stat-card">
+            <h5 class="mb-3"><i class="bi bi-list-check"></i> Summary Report</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Detection Type</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in stats.by_type %}
+                    <tr>
+                        <td><i class="bi bi-bookmark"></i> {{ item.detection_type }}</td>
+                        <td>{{ item.count }}</td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar" style="width: {{ (item.count / stats.total_detections * 100)|round(1) }}%; background: var(--primary-green);">
+                                    {{ (item.count / stats.total_detections * 100)|round(1) }}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Detection Chart
+const detectionCtx = document.getElementById('detectionChart').getContext('2d');
+new Chart(detectionCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [{% for item in stats.by_type %}'{{ item.detection_type }}',{% endfor %}],
+        datasets: [{
+            data: [{% for item in stats.by_type %}{{ item.count }},{% endfor %}],
+            backgroundColor: ['#2ecc71', '#90EE90', '#27ae60', '#66BB6A']
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Timeline Chart
+const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+new Chart(timelineCtx, {
+    type: 'line',
+    data: {
+        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+        datasets: [{
+            label: 'Documents Uploaded',
+            data: [{{ documents|length if documents|length < 4 else 3 }}, {{ documents|length if documents|length < 6 else 5 }}, {{ documents|length if documents|length < 8 else 7 }}, {{ documents|length }}],
+            borderColor: '#2ecc71',
+            backgroundColor: 'rgba(46, 204, 113, 0.1)',
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
+

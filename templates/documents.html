@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block page_title %}Documents{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4><i class="bi bi-file-earmark-text"></i> All Documents</h4>
+                <a href="{{ url_for('upload_page') }}" class="btn btn-primary-custom">
+                    <i class="bi bi-plus-circle"></i> Upload New
+                </a>
+            </div>
+            
+            <!-- Filters -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <select class="form-select" id="typeFilter">
+                        <option value="all">All Types</option>
+                        <option value="signature">Signatures</option>
+                        <option value="stamp">Stamps</option>
+                        <option value="qr">QR Codes</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <input type="range" class="form-range" min="0" max="100" value="0" id="confFilter">
+                    <small>Min Confidence: <span id="confValue">0%</span></small>
+                </div>
+            </div>
+            
+            <!-- Documents Table -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Document Name</th>
+                            <th>Upload Date</th>
+                            <th>Pages</th>
+                            <th>Size</th>
+                            <th>Signatures</th>
+                            <th>Stamps</th>
+                            <th>QR Codes</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documents %}
+                        <tr>
+                            <td>#{{ doc.id }}</td>
+                            <td>
+                                <i class="bi bi-file-pdf text-danger"></i>
+                                {{ doc.original_filename }}
+                            </td>
+                            <td>{{ doc.upload_date }}</td>
+                            <td>{{ doc.pages }}</td>
+                            <td>{{ (doc.file_size / 1024)|round(1) }} KB</td>
+                            <td><span class="badge bg-success">{{ doc.signatures_count or 0 }}</span></td>
+                            <td><span class="badge badge-light-green">{{ doc.stamps_count or 0 }}</span></td>
+                            <td><span class="badge bg-warning text-dark">{{ doc.qr_count or 0 }}</span></td>
+                            <td>
+                                <span class="badge {% if doc.processing_status == 'completed' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ doc.processing_status }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('document_details', document_id=doc.id) }}" class="btn btn-sm btn-primary-custom">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('download_document', document_id=doc.id) }}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('confFilter').addEventListener('input', function(e) {
+    document.getElementById('confValue').textContent = e.target.value + '%';
+});
+</script>
+{% endblock %}
+
