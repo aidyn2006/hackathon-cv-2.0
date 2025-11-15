@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детекция QR-кодов, подписей и штампов</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Детекция документов</h1>
+            <p>Загрузите PDF файл для обнаружения QR-кодов, подписей и штампов</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileInput" accept=".pdf" hidden>
+                <div class="upload-content">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Перетащите PDF файл сюда или <span class="link">выберите файл</span></p>
+                    <p class="hint">Максимальный размер: 16MB</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Обработка документа...</p>
+        </div>
+
+        <div class="results" id="results" style="display: none;">
+            <h2>Результаты детекции</h2>
+            <div id="resultsContainer"></div>
+        </div>
+
+        <div class="error" id="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const error = document.getElementById('error');
+
+        // Проверка наличия элементов
+        if (!uploadArea || !fileInput || !loading || !results || !resultsContainer || !error) {
+            console.error('Не все необходимые элементы найдены в DOM');
+        }
+
+        // Клик по области загрузки
+        if (uploadArea && fileInput) {
+            uploadArea.addEventListener('click', () => fileInput.click());
+        }
+
+        // Перетаскивание файла
+        if (uploadArea) {
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+        }
+
+        function handleFile(file) {
+            if (!file.type.includes('pdf')) {
+                showError('Пожалуйста, загрузите PDF файл');
+                return;
+            }
+
+            if (file.size > 16 * 1024 * 1024) {
+                showError('Файл слишком большой. Максимальный размер: 16MB');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            if (loading) loading.style.display = 'block';
+            if (results) results.style.display = 'none';
+            if (error) error.style.display = 'none';
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (loading) loading.style.display = 'none';
+                if (data.success) {
+                    displayResults(data.results);
+                } else {
+                    showError(data.error || 'Произошла ошибка при обработке файла');
+                }
+            })
+            .catch(err => {
+                if (loading) loading.style.display = 'none';
+                if (results) {
+                    results.style.display = 'none';
+                }
+                showError('Ошибка соединения с сервером: ' + err.message);
+            });
+        }
+
+        function displayResults(data) {
+            if (!resultsContainer) {
+                console.error('resultsContainer не найден');
+                return;
+            }
+            
+            if (!data || !Array.isArray(data)) {
+                showError('Некорректные данные от сервера');
+                return;
+            }
+            
+            resultsContainer.innerHTML = '';
+            
+            data.forEach((pageResult, index) => {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'page-result';
+                
+                const pageHeader = document.createElement('div');
+                pageHeader.className = 'page-header';
+                pageHeader.innerHTML = `<h3>Страница ${pageResult.page}</h3>`;
+                
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'result-image';
+                const img = document.createElement('img');
+                img.src = 'data:image/png;base64,' + pageResult.image;
+                img.alt = `Страница ${pageResult.page}`;
+                imageDiv.appendChild(img);
+                
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'stats';
+                
+                // Статистика YOLO детекций
+                const yoloStats = {};
+                pageResult.yolo_detections.forEach(det => {
+                    const className = det.class;
+                    yoloStats[className] = (yoloStats[className] || 0) + 1;
+                });
+                
+                let statsHTML = '<div class="stats-section"><h4>Обнаруженные объекты:</h4><ul>';
+                Object.entries(yoloStats).forEach(([className, count]) => {
+                    statsHTML += `<li><strong>${className}</strong>: ${count}</li>`;
+                });
+                statsHTML += '</ul></div>';
+                
+                // Статистика QR-кодов
+                if (pageResult.qr_codes.length > 0) {
+                    statsHTML += '<div class="stats-section"><h4>QR-коды:</h4><ul>';
+                    pageResult.qr_codes.forEach((qr, idx) => {
+                        statsHTML += `<li>QR-код ${idx + 1}: ${qr.data.substring(0, 50)}${qr.data.length > 50 ? '...' : ''}</li>`;
+                    });
+                    statsHTML += '</ul></div>';
+                }
+                
+                statsDiv.innerHTML = statsHTML;
+                
+                pageDiv.appendChild(pageHeader);
+                pageDiv.appendChild(imageDiv);
+                pageDiv.appendChild(statsDiv);
+                
+                resultsContainer.appendChild(pageDiv);
+            });
+            
+            if (results) {
+                results.style.display = 'block';
+            }
+        }
+
+        function showError(message) {
+            if (!error) {
+                console.error('Элемент error не найден:', message);
+                return;
+            }
+            error.textContent = message;
+            error.style.display = 'block';
+            setTimeout(() => {
+                error.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
