@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: digital-inspector
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./annotated:/app/annotated
+      - ./digital_inspector.db:/app/digital_inspector.db
+      - ./best.pt:/app/best.pt
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  uploads:
+  annotated:
+
