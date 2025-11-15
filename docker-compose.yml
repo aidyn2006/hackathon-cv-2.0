@@ -9,6 +9,11 @@ services:
       - ./annotated:/app/annotated
       - ./digital_inspector.db:/app/digital_inspector.db
       - ./best.pt:/app/best.pt
+      - ./best-4.pt:/app/best-4.pt
+      - ./app_inspector.py:/app/app_inspector.py
+      - ./preprocessing.py:/app/preprocessing.py
+      - ./postprocessing.py:/app/postprocessing.py
+      - ./database.py:/app/database.py
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1

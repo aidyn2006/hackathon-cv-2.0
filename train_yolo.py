@@ -156,7 +156,7 @@ def train_model(
         logger.info("=" * 80)
         
         # Информация о результатах
-        best_model_path = Path(project) / name / 'weights' / 'best.pt'
+        best_model_path = Path(project) / name / 'weights' / 'best-2.pt'
         logger.info(f"Best model saved to: {best_model_path}")
         
         return results

@@ -80,6 +80,12 @@ def deskew_image(image):
         else:
             angle = -angle
         
+        # Ограничиваем максимальный угол поворота до 10 градусов
+        # Это предотвращает неправильное определение ориентации и поворот на 90 градусов
+        if abs(angle) > 10:
+            logger.info(f"Skipping deskew: angle {angle:.2f} degrees is too large (max 10)")
+            return img
+        
         if abs(angle) > 0.1:
             logger.info(f"Deskewing image by {angle:.2f} degrees")
             (h, w) = img.shape[:2]

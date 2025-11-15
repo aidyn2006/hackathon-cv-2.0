@@ -35,7 +35,7 @@ app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Загружаем модель с оптимальными настройками
-model_path = 'best.pt'
+model_path = 'best-4.pt'
 if os.path.exists(model_path):
     model = YOLO(model_path)
     logger.info(f"Model loaded successfully from {model_path}")

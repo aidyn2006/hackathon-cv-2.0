@@ -42,7 +42,7 @@ app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'png', 'jpg', 'jpeg'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['ANNOTATED_FOLDER'], exist_ok=True)
 
-model_path = 'best.pt'
+model_path = 'best-4.pt'
 if os.path.exists(model_path):
     model = YOLO(model_path)
     import torch
@@ -483,7 +483,7 @@ def api_documents():
 @app.route('/api/document/<int:document_id>/export')
 @login_required
 def export_document_json(document_id):
-    """Export document annotations in JSON format for submission"""
+    """Export document annotations in JSON format"""
     document = db.get_document_by_id(document_id)
     if not document or document['user_id'] != session['user_id']:
         return jsonify({'error': 'Document not found'}), 404
@@ -491,43 +491,61 @@ def export_document_json(document_id):
     detections = db.get_document_detections(document_id)
     
     pages_data = {}
+    annotation_counter = 1
+    
     for det in detections:
-        page = det['page_number']
-        if page not in pages_data:
-            pages_data[page] = {
-                'page_number': page,
-                'annotations': []
+        page_num = det['page_number']
+        page_key = f"page_{page_num}"
+        
+        if page_key not in pages_data:
+            annotated_path = os.path.join(app.config['ANNOTATED_FOLDER'], 
+                                         f"doc_{document_id}_page_{page_num}.png")
+            
+            page_width, page_height = 1684, 1190
+            if os.path.exists(annotated_path):
+                img = cv2.imread(annotated_path)
+                if img is not None:
+                    page_height, page_width = img.shape[:2]
+            
+            pages_data[page_key] = {
+                'annotations': [],
+                'page_size': {
+                    'width': page_width,
+                    'height': page_height
+                }
             }
         
-        annotation = {
-            'type': det['detection_type'],
-            'confidence': round(det['confidence'], 3),
-            'bbox': {
-                'x1': round(det['bbox_x1'], 2),
-                'y1': round(det['bbox_y1'], 2),
-                'x2': round(det['bbox_x2'], 2),
-                'y2': round(det['bbox_y2'], 2)
+        x1, y1, x2, y2 = det['bbox_x1'], det['bbox_y1'], det['bbox_x2'], det['bbox_y2']
+        width = x2 - x1
+        height = y2 - y1
+        area = width * height
+        
+        category = det['detection_type'].lower()
+        if 'signature' in category or 'подпись' in category:
+            category = 'signature'
+        elif 'stamp' in category or 'штамп' in category:
+            category = 'stamp'
+        elif 'qr' in category:
+            category = 'qr_code'
+        
+        annotation_obj = {
+            f"annotation_{annotation_counter}": {
+                'category': category,
+                'bbox': {
+                    'x': round(x1, 2),
+                    'y': round(y1, 2),
+                    'width': round(width, 2),
+                    'height': round(height, 2)
+                },
+                'area': round(area, 2)
             }
         }
         
-        if det.get('qr_data'):
-            annotation['qr_data'] = det['qr_data']
-            annotation['qr_valid'] = det.get('qr_valid', True)
-        
-        pages_data[page]['annotations'].append(annotation)
+        pages_data[page_key]['annotations'].append(annotation_obj)
+        annotation_counter += 1
     
     export_data = {
-        'document_id': document_id,
-        'filename': document['original_filename'],
-        'upload_date': document['upload_date'],
-        'total_pages': document['pages'],
-        'pages': list(pages_data.values()),
-        'summary': {
-            'total_annotations': len(detections),
-            'signatures': len([d for d in detections if 'signature' in d['detection_type'].lower() or 'подпись' in d['detection_type'].lower()]),
-            'stamps': len([d for d in detections if 'stamp' in d['detection_type'].lower() or 'штамп' in d['detection_type'].lower()]),
-            'qr_codes': len([d for d in detections if 'qr' in d['detection_type'].lower()])
-        }
+        document['original_filename']: pages_data
     }
     
     return jsonify(export_data)
