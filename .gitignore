@@ -30,3 +30,23 @@ Thumbs.db
 # Logs
 *.log
 
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Utility scripts
+cleanup_duplicates.py
+remove_comments.py
+
+# Annotated images
+annotated/
+
+# Documentation files
+*_FIX.md
+*_OVERVIEW.md
+*_SETTINGS.md
+*_CHEATSHEET.md
+QUICKSTART.md
+

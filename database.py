@@ -12,7 +12,6 @@ def init_db():
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
-    # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +22,6 @@ def init_db():
         )
     ''')
     
-    # Documents table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +37,6 @@ def init_db():
         )
     ''')
     
-    # Detections table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS detections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +56,6 @@ def init_db():
         )
     ''')
     
-    # Sessions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +67,6 @@ def init_db():
         )
     ''')
     
-    # Insert demo users
     demo_users = [
         ('inspector', 'demo123', 'Digital Inspector'),
         ('admin', 'admin123', 'System Administrator'),
@@ -85,7 +80,7 @@ def init_db():
                 (username, password, full_name)
             )
         except sqlite3.IntegrityError:
-            pass  # User already exists
+            pass
     
     conn.commit()
     conn.close()
@@ -196,11 +191,9 @@ def get_dashboard_stats(user_id):
     conn = get_db()
     cursor = conn.cursor()
     
-    # Total documents
     cursor.execute('SELECT COUNT(*) as count FROM documents WHERE user_id = ?', (user_id,))
     total_docs = cursor.fetchone()['count']
     
-    # Total detections
     cursor.execute('''
         SELECT COUNT(*) as count FROM detections det
         JOIN documents doc ON det.document_id = doc.id
@@ -208,7 +201,6 @@ def get_dashboard_stats(user_id):
     ''', (user_id,))
     total_detections = cursor.fetchone()['count']
     
-    # Detections by type
     cursor.execute('''
         SELECT detection_type, COUNT(*) as count 
         FROM detections det
@@ -218,7 +210,6 @@ def get_dashboard_stats(user_id):
     ''', (user_id,))
     by_type = cursor.fetchall()
     
-    # Average confidence
     cursor.execute('''
         SELECT AVG(confidence) as avg_conf FROM detections det
         JOIN documents doc ON det.document_id = doc.id
@@ -241,4 +232,3 @@ if __name__ == '__main__':
     print("  inspector / demo123")
     print("  admin / admin123")
     print("  user / user123")
-

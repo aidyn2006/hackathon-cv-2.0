@@ -6,18 +6,35 @@
     <title>{% block title %}Digital Inspector{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-green: #2ecc71;
-            --light-green: #90EE90;
-            --white: #ffffff;
-            --dark-bg: #1a1a1a;
-            --sidebar-width: 250px;
+            --primary-color: #1e40af;
+            --secondary-color: #3b82f6;
+            --sidebar-bg: #1e293b;
+            --sidebar-hover: #334155;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-900: #0f172a;
+            --sidebar-width: 260px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--gray-50);
+            color: var(--gray-900);
+            font-size: 14px;
         }
         
         .sidebar {
@@ -26,129 +43,199 @@
             left: 0;
             height: 100vh;
             width: var(--sidebar-width);
-            background: linear-gradient(135deg, var(--primary-green), var(--light-green));
-            color: white;
-            padding: 20px;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            background: var(--sidebar-bg);
+            color: #cbd5e1;
+            padding: 0;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
             z-index: 1000;
+            overflow-y: auto;
         }
         
         .sidebar-logo {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 30px;
-            text-align: center;
-            padding: 15px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: var(--gray-900);
         }
         
-        .sidebar-menu {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .sidebar-menu li {
-            margin-bottom: 10px;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 15px;
+        .sidebar-logo h5 {
             color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-        
-        .sidebar-menu a:hover, .sidebar-menu a.active {
-            background: rgba(255,255,255,0.2);
-            transform: translateX(5px);
-        }
-        
-        .sidebar-menu i {
-            margin-right: 10px;
-            font-size: 20px;
-        }
-        
-        .main-content {
-            margin-left: var(--sidebar-width);
-            padding: 20px;
-            min-height: 100vh;
-        }
-        
-        .top-bar {
-            background: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .user-info {
+            font-weight: 600;
+            font-size: 16px;
+            margin: 0;
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
+        .sidebar-logo i {
+            font-size: 24px;
+            color: var(--secondary-color);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 12px 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin: 0;
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-menu a:hover {
+            background: var(--sidebar-hover);
+            color: white;
+            border-left-color: var(--secondary-color);
+        }
+        
+        .sidebar-menu a.active {
+            background: var(--sidebar-hover);
+            color: white;
+            border-left-color: var(--secondary-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 12px;
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .sidebar-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 24px 32px;
+            min-height: 100vh;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--gray-200);
+        }
+        
+        .top-bar h4 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin: 0;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--gray-600);
+            font-size: 14px;
+        }
+        
         .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--primary-green);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--secondary-color);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 14px;
         }
         
         .stat-card {
             background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            transition: transform 0.3s;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--gray-200);
+            transition: box-shadow 0.2s;
         }
         
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        .stat-card h5, .stat-card h6 {
+            color: var(--gray-900);
+            font-weight: 600;
         }
         
         .stat-icon {
-            font-size: 36px;
-            color: var(--primary-green);
+            font-size: 32px;
+            color: var(--secondary-color);
         }
         
         .btn-primary-custom {
-            background: var(--primary-green);
+            background: var(--primary-color);
             border: none;
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: 6px;
             color: white;
             font-weight: 500;
-            transition: all 0.3s;
+            font-size: 14px;
+            transition: all 0.2s;
         }
         
         .btn-primary-custom:hover {
-            background: #27ae60;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+            background: var(--secondary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.25);
         }
         
-        .badge-green {
-            background: var(--primary-green);
+        .badge-custom {
+            background: var(--gray-100);
+            color: var(--gray-700);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
         }
         
-        .badge-light-green {
-            background: var(--light-green);
-            color: #2d3436;
+        .badge-primary {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .btn-outline-light {
+            border-color: rgba(255,255,255,0.3);
+            color: #cbd5e1;
+        }
+        
+        .btn-outline-light:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.5);
+            color: white;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -157,34 +244,34 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-logo">
-            <i class="bi bi-shield-check"></i> Digital Inspector
+            <h5><i class="bi bi-shield-check"></i> Digital Inspector</h5>
         </div>
         <ul class="sidebar-menu">
             <li>
                 <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
-                    <i class="bi bi-speedometer2"></i> Dashboard
+                    <i class="bi bi-grid-fill"></i> Dashboard
                 </a>
             </li>
             <li>
                 <a href="{{ url_for('upload_page') }}" class="{% if request.endpoint == 'upload_page' %}active{% endif %}">
-                    <i class="bi bi-cloud-upload"></i> Upload Document
+                    <i class="bi bi-cloud-upload-fill"></i> Upload
                 </a>
             </li>
             <li>
                 <a href="{{ url_for('documents_list') }}" class="{% if request.endpoint == 'documents_list' %}active{% endif %}">
-                    <i class="bi bi-file-earmark-text"></i> Documents
+                    <i class="bi bi-folder-fill"></i> Documents
                 </a>
             </li>
             <li>
                 <a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">
-                    <i class="bi bi-bar-chart"></i> Reports
+                    <i class="bi bi-bar-chart-fill"></i> Analytics
                 </a>
             </li>
         </ul>
         
-        <div style="position: absolute; bottom: 20px; width: calc(100% - 40px);">
-            <a href="{{ url_for('logout') }}" class="btn btn-outline-light w-100">
-                <i class="bi bi-box-arrow-right"></i> Logout
+        <div class="sidebar-footer">
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light w-100 btn-sm">
+                <i class="bi bi-box-arrow-right"></i> Sign Out
             </a>
         </div>
     </div>
@@ -192,7 +279,7 @@
     <!-- Main Content -->
     <div class="main-content">
         <div class="top-bar">
-            <h4 class="mb-0">{% block page_title %}Welcome{% endblock %}</h4>
+            <h4>{% block page_title %}Dashboard{% endblock %}</h4>
             <div class="user-info">
                 <div class="user-avatar">{{ username[0]|upper if username else 'U' }}</div>
                 <span>{{ username if username else 'User' }}</span>
@@ -206,4 +293,3 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
-
