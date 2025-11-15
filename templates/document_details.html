@@ -28,6 +28,12 @@
             <a href="{{ url_for('download_document', document_id=document.id) }}" class="btn btn-primary-custom btn-sm w-100 mb-2">
                 <i class="bi bi-download"></i> Original Document
             </a>
+            <a href="{{ url_for('download_annotated_pdf', document_id=document.id) }}" class="btn btn-success btn-sm w-100 mb-2">
+                <i class="bi bi-file-earmark-pdf"></i> Download with Annotations
+            </a>
+            <a href="{{ url_for('export_document_json', document_id=document.id) }}" class="btn btn-warning btn-sm w-100 mb-2" target="_blank">
+                <i class="bi bi-file-code"></i> Export JSON
+            </a>
             {% for page_num in pages.keys() %}
             <a href="{{ url_for('download_annotated', document_id=document.id, page=page_num) }}" class="btn btn-outline-secondary btn-sm w-100 mb-1">
                 <i class="bi bi-image"></i> Annotated Page {{ page_num }}
@@ -40,6 +46,25 @@
     <div class="col-md-8">
         <div class="stat-card">
             <h5><i class="bi bi-search"></i> Detections</h5>
+            
+            <!-- Color Legend -->
+            <div class="alert alert-info mb-3">
+                <h6 class="mb-2"><i class="bi bi-palette"></i> Color Legend:</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <span style="display: inline-block; width: 30px; height: 4px; background: #00ff00; margin-right: 8px;"></span>
+                        <strong style="color: #00ff00;">Green</strong> = Signature / Подпись
+                    </div>
+                    <div class="col-md-4">
+                        <span style="display: inline-block; width: 30px; height: 4px; background: #ff00ff; margin-right: 8px;"></span>
+                        <strong style="color: #ff00ff;">Purple</strong> = Stamp / Штамп
+                    </div>
+                    <div class="col-md-4">
+                        <span style="display: inline-block; width: 30px; height: 4px; background: #ffff00; margin-right: 8px;"></span>
+                        <strong style="color: #cccc00;">Yellow</strong> = QR Code
+                    </div>
+                </div>
+            </div>
             <hr>
             
             {% for page_num, page_data in pages.items() %}
@@ -55,7 +80,10 @@
                         {% set original_path = annotated_path.replace('.png', '_original.png') %}
                         <div class="row">
                             <div class="col-md-6">
-                                <h6 class="text-center">📄 Original Document</h6>
+                                <div class="alert alert-secondary text-center py-2 mb-2">
+                                    <strong>📄 Before Processing</strong>
+                                    <small class="d-block text-muted">Original document (no preprocessing)</small>
+                                </div>
                                 <img src="data:image/png;base64,{{ get_image_base64(original_path) }}" 
                                      class="img-fluid rounded shadow" 
                                      alt="Original Page {{ page_num }}"
@@ -64,7 +92,10 @@
                                 <p class="text-center text-muted mt-2"><small>Click to enlarge</small></p>
                             </div>
                             <div class="col-md-6">
-                                <h6 class="text-center">🔍 With Detections</h6>
+                                <div class="alert alert-success text-center py-2 mb-2">
+                                    <strong>🔍 After Processing</strong>
+                                    <small class="d-block text-muted">With detections (bbox drawn)</small>
+                                </div>
                                 <img src="data:image/png;base64,{{ get_image_base64(annotated_path) }}" 
                                      class="img-fluid rounded shadow" 
                                      alt="Annotated Page {{ page_num }}"
@@ -75,62 +106,6 @@
                         </div>
                         {% endif %}
                     {% endif %}
-                </div>
-            </div>
-            
-            <div class="accordion mb-3" id="accordionPage{{ page_num }}">
-                <!-- YOLO Detections -->
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#detections{{ page_num }}">
-                            <i class="bi bi-search"></i> YOLO Detections ({{ page_data.detections|length }})
-                        </button>
-                    </h2>
-                    <div id="detections{{ page_num }}" class="accordion-collapse collapse show">
-                        <div class="accordion-body">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Type</th>
-                                        <th>Confidence</th>
-                                        <th>Bounding Box</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for det in page_data.detections %}
-                                    <tr>
-                                        <td>
-                                            <span class="badge {% if 'signature' in det.detection_type.lower() %}bg-success{% elif 'stamp' in det.detection_type.lower() %}badge-light-green{% else %}bg-secondary{% endif %}">
-                                                {{ det.detection_type }}
-                                            </span>
-                                        </td>
-                                        <td>{{ (det.confidence * 100)|round(1) }}%</td>
-                                        <td><small>{{ det.bbox_x1|round(0) }}, {{ det.bbox_y1|round(0) }}, {{ det.bbox_x2|round(0) }}, {{ det.bbox_y2|round(0) }}</small></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- QR Codes -->
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#qrcodes{{ page_num }}">
-                            <i class="bi bi-qr-code"></i> QR Codes ({{ page_data.qr_codes|length }})
-                        </button>
-                    </h2>
-                    <div id="qrcodes{{ page_num }}" class="accordion-collapse collapse">
-                        <div class="accordion-body">
-                            {% for qr in page_data.qr_codes %}
-                            <div class="alert {% if qr.qr_valid %}alert-success{% else %}alert-warning{% endif %}">
-                                <strong>{% if qr.qr_valid %}✓{% else %}✗{% endif %} QR Code:</strong><br>
-                                <code>{{ qr.qr_data }}</code>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
                 </div>
             </div>
             {% endfor %}

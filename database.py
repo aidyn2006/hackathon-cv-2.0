@@ -149,10 +149,10 @@ def get_user_documents(user_id, limit=50):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT d.*, 
-               COUNT(det.id) as total_detections,
-               SUM(CASE WHEN det.detection_type IN ('signature', 'Signature') THEN 1 ELSE 0 END) as signatures_count,
-               SUM(CASE WHEN det.detection_type IN ('stamp', 'Stamp') THEN 1 ELSE 0 END) as stamps_count,
-               SUM(CASE WHEN det.detection_type LIKE '%qr%' OR det.detection_type LIKE '%QR%' THEN 1 ELSE 0 END) as qr_count
+               COALESCE(COUNT(DISTINCT CASE WHEN det.id IS NOT NULL THEN det.id END), 0) as total_detections,
+               COALESCE(SUM(CASE WHEN det.id IS NOT NULL AND (LOWER(det.detection_type) LIKE '%signature%' OR LOWER(det.detection_type) LIKE '%подпись%') THEN 1 ELSE 0 END), 0) as signatures_count,
+               COALESCE(SUM(CASE WHEN det.id IS NOT NULL AND (LOWER(det.detection_type) LIKE '%stamp%' OR LOWER(det.detection_type) LIKE '%штамп%') THEN 1 ELSE 0 END), 0) as stamps_count,
+               COALESCE(SUM(CASE WHEN det.id IS NOT NULL AND LOWER(det.detection_type) LIKE '%qr%' THEN 1 ELSE 0 END), 0) as qr_count
         FROM documents d
         LEFT JOIN detections det ON d.id = det.document_id
         WHERE d.user_id = ?

@@ -243,6 +243,8 @@ def process_page(pil_image, document_id, page_number):
     img_array = np.array(pil_image)
     img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
     
+    original_img = img_cv.copy()
+    
     preprocessed_img = preprocess_for_yolo(img_cv, target_size=640, fast_mode=True)
     
     yolo_results = []
@@ -268,11 +270,13 @@ def process_page(pil_image, document_id, page_number):
                     'bbox': [float(x1), float(y1), float(x2), float(y2)]
                 })
     
+    yolo_results_no_qr = [det for det in yolo_results if 'qr' not in det['class'].lower()]
+    
     qr_codes = detect_qr_codes(preprocessed_img)
     
-    yolo_results, qr_codes = post_process_detections(yolo_results, preprocessed_img, qr_codes)
+    yolo_results_no_qr, qr_codes = post_process_detections(yolo_results_no_qr, preprocessed_img, qr_codes)
     
-    annotated_img = draw_annotations(preprocessed_img.copy(), yolo_results, qr_codes)
+    annotated_img = draw_annotations(preprocessed_img.copy(), yolo_results_no_qr, qr_codes)
     
     annotated_filename = f"doc_{document_id}_page_{page_number}.png"
     annotated_path = os.path.join(app.config['ANNOTATED_FOLDER'], annotated_filename)
@@ -280,9 +284,9 @@ def process_page(pil_image, document_id, page_number):
     
     original_filename = f"doc_{document_id}_page_{page_number}_original.png"
     original_path = os.path.join(app.config['ANNOTATED_FOLDER'], original_filename)
-    cv2.imwrite(original_path, preprocessed_img)
+    cv2.imwrite(original_path, original_img)
     
-    for det in yolo_results:
+    for det in yolo_results_no_qr:
         db.save_detection(
             document_id, page_number, det['class'], det['confidence'],
             det['bbox'], annotated_image_path=annotated_path
@@ -300,14 +304,14 @@ def process_page(pil_image, document_id, page_number):
     _, annotated_buffer = cv2.imencode('.png', annotated_img)
     annotated_base64 = base64.b64encode(annotated_buffer).decode('utf-8')
     
-    _, original_buffer = cv2.imencode('.png', preprocessed_img)
+    _, original_buffer = cv2.imencode('.png', original_img)
     original_base64 = base64.b64encode(original_buffer).decode('utf-8')
     
     return {
         'page': page_number,
         'image': annotated_base64,
         'original_image': original_base64,
-        'detections': yolo_results,
+        'detections': yolo_results_no_qr,
         'qr_codes': [{'data': qr.get('data', ''), 'valid': qr.get('valid', True)} for qr in qr_codes]
     }
 
@@ -322,12 +326,15 @@ def draw_annotations(image, detections, qr_codes):
         
         if 'signature' in class_name.lower() or 'подпись' in class_name.lower():
             color = (0, 255, 0)
+            thickness = 5
         elif 'stamp' in class_name.lower() or 'штамп' in class_name.lower():
-            color = (144, 238, 144)
+            color = (255, 0, 255)
+            thickness = 5
         else:
-            color = (255, 255, 255)
+            color = (0, 0, 255)
+            thickness = 3
         
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
         
         label = f"{class_name} {conf:.2f}"
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -350,7 +357,7 @@ def draw_annotations(image, detections, qr_codes):
         x2, y2 = rect.left + rect.width, rect.top + rect.height
         
         color = (0, 255, 255) if qr.get('valid', True) else (0, 165, 255)
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 6)
         
         label = f"QR: {qr.get('data', '')[:20]}..."
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -407,6 +414,39 @@ def download_document(document_id):
                     as_attachment=True,
                     download_name=document['original_filename'])
 
+@app.route('/document/<int:document_id>/download_annotated')
+@login_required
+def download_annotated_pdf(document_id):
+    """Download PDF with all annotated pages"""
+    import img2pdf
+    from io import BytesIO
+    
+    document = db.get_document_by_id(document_id)
+    if not document or document['user_id'] != session['user_id']:
+        return "Document not found", 404
+    
+    annotated_images = []
+    for page_num in range(1, document['pages'] + 1):
+        annotated_path = os.path.join(app.config['ANNOTATED_FOLDER'], 
+                                     f"doc_{document_id}_page_{page_num}.png")
+        if os.path.exists(annotated_path):
+            annotated_images.append(annotated_path)
+    
+    if not annotated_images:
+        return "No annotated images found", 404
+    
+    pdf_bytes = img2pdf.convert(annotated_images)
+    
+    pdf_buffer = BytesIO(pdf_bytes)
+    pdf_buffer.seek(0)
+    
+    filename = document['original_filename'].replace('.pdf', '_annotated.pdf')
+    
+    return send_file(pdf_buffer,
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=filename)
+
 @app.route('/document/<int:document_id>/annotated/<int:page>')
 @login_required
 def download_annotated(document_id, page):
@@ -439,6 +479,58 @@ def api_documents():
     user_id = session['user_id']
     documents = db.get_user_documents(user_id)
     return jsonify({'documents': documents})
+
+@app.route('/api/document/<int:document_id>/export')
+@login_required
+def export_document_json(document_id):
+    """Export document annotations in JSON format for submission"""
+    document = db.get_document_by_id(document_id)
+    if not document or document['user_id'] != session['user_id']:
+        return jsonify({'error': 'Document not found'}), 404
+    
+    detections = db.get_document_detections(document_id)
+    
+    pages_data = {}
+    for det in detections:
+        page = det['page_number']
+        if page not in pages_data:
+            pages_data[page] = {
+                'page_number': page,
+                'annotations': []
+            }
+        
+        annotation = {
+            'type': det['detection_type'],
+            'confidence': round(det['confidence'], 3),
+            'bbox': {
+                'x1': round(det['bbox_x1'], 2),
+                'y1': round(det['bbox_y1'], 2),
+                'x2': round(det['bbox_x2'], 2),
+                'y2': round(det['bbox_y2'], 2)
+            }
+        }
+        
+        if det.get('qr_data'):
+            annotation['qr_data'] = det['qr_data']
+            annotation['qr_valid'] = det.get('qr_valid', True)
+        
+        pages_data[page]['annotations'].append(annotation)
+    
+    export_data = {
+        'document_id': document_id,
+        'filename': document['original_filename'],
+        'upload_date': document['upload_date'],
+        'total_pages': document['pages'],
+        'pages': list(pages_data.values()),
+        'summary': {
+            'total_annotations': len(detections),
+            'signatures': len([d for d in detections if 'signature' in d['detection_type'].lower() or 'подпись' in d['detection_type'].lower()]),
+            'stamps': len([d for d in detections if 'stamp' in d['detection_type'].lower() or 'штамп' in d['detection_type'].lower()]),
+            'qr_codes': len([d for d in detections if 'qr' in d['detection_type'].lower()])
+        }
+    }
+    
+    return jsonify(export_data)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)
