@@ -42,21 +42,28 @@ app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'png', 'jpg', 'jpeg'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['ANNOTATED_FOLDER'], exist_ok=True)
 
-model_path = 'best-4.pt'
-if os.path.exists(model_path):
-    model = YOLO(model_path)
-    import torch
-    if torch.cuda.is_available():
-        model.to('cuda')
-        logger.info(f"✅ YOLO with CUDA GPU")
-    elif torch.backends.mps.is_available():
-        model.to('mps')
-        logger.info(f"✅ YOLO with MPS (Apple Silicon)")
-    else:
-        logger.info(f"✅ YOLO on CPU")
+model_stamps_path = 'best.pt'
+model_signature_path = 'best-4.pt'
+
+model_stamps = None
+model_signature = None
+
+import torch
+device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+
+if os.path.exists(model_stamps_path):
+    model_stamps = YOLO(model_stamps_path)
+    model_stamps.to(device)
+    logger.info(f"✅ Stamps/QR model loaded on {device}")
 else:
-    model = None
-    logger.warning(f"❌ Model not found!")
+    logger.warning(f"❌ Stamps model not found: {model_stamps_path}")
+
+if os.path.exists(model_signature_path):
+    model_signature = YOLO(model_signature_path)
+    model_signature.to(device)
+    logger.info(f"✅ Signature model loaded on {device}")
+else:
+    logger.warning(f"❌ Signature model not found: {model_signature_path}")
 
 db.init_db()
 
@@ -248,21 +255,44 @@ def process_page(pil_image, document_id, page_number):
     preprocessed_img = preprocess_for_yolo(img_cv, target_size=640, fast_mode=True)
     
     yolo_results = []
-    if model is not None:
-        yolo_detections = model(preprocessed_img, 
-                               conf=0.20,
-                               imgsz=640,
-                               iou=0.5,
-                               verbose=False,
-                               half=True)
+    
+    if model_stamps is not None:
+        stamps_detections = model_stamps(preprocessed_img, 
+                                        conf=0.20,
+                                        imgsz=640,
+                                        iou=0.5,
+                                        verbose=False,
+                                        half=True)
         
-        for detection in yolo_detections:
+        for detection in stamps_detections:
             boxes = detection.boxes
             for box in boxes:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 conf = box.conf[0].cpu().numpy()
                 cls = int(box.cls[0].cpu().numpy())
-                class_name = model.names[cls]
+                class_name = model_stamps.names[cls]
+                
+                yolo_results.append({
+                    'class': class_name,
+                    'confidence': float(conf),
+                    'bbox': [float(x1), float(y1), float(x2), float(y2)]
+                })
+    
+    if model_signature is not None:
+        signature_detections = model_signature(preprocessed_img, 
+                                              conf=0.20,
+                                              imgsz=640,
+                                              iou=0.5,
+                                              verbose=False,
+                                              half=True)
+        
+        for detection in signature_detections:
+            boxes = detection.boxes
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = box.conf[0].cpu().numpy()
+                cls = int(box.cls[0].cpu().numpy())
+                class_name = model_signature.names[cls]
                 
                 yolo_results.append({
                     'class': class_name,
