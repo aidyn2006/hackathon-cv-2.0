@@ -1,29 +1,54 @@
+version: '3.8'
+
 services:
-  app:
-    build: .
+  digital-inspector:
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: digital-inspector
     ports:
       - "5002:5002"
     volumes:
+      # Папки для загрузок и результатов (персистентность)
       - ./uploads:/app/uploads
       - ./annotated:/app/annotated
+      # База данных (персистентность)
       - ./digital_inspector.db:/app/digital_inspector.db
-      - ./best.pt:/app/best.pt
-      - ./best-4.pt:/app/best-4.pt
-      - ./app_inspector.py:/app/app_inspector.py
-      - ./preprocessing.py:/app/preprocessing.py
-      - ./postprocessing.py:/app/postprocessing.py
-      - ./database.py:/app/database.py
+      # Логи
+      - ./inspector.log:/app/inspector.log
+      # Модели YOLO (только для разработки, в продакшне уже в образе)
+      - ./best.pt:/app/best.pt:ro
+      - ./best-4.pt:/app/best-4.pt:ro
+      # Код приложения (для горячей перезагрузки в dev режиме)
+      # Раскомментируйте если нужна разработка:
+      # - ./app_inspector.py:/app/app_inspector.py
+      # - ./preprocessing.py:/app/preprocessing.py
+      # - ./postprocessing.py:/app/postprocessing.py
+      # - ./database.py:/app/database.py
+      # - ./templates:/app/templates
+      # - ./static:/app/static
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
+      - TZ=Asia/Almaty
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5002/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5002/login"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+    networks:
+      - inspector-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  inspector-network:
+    driver: bridge
 
 volumes:
   uploads:

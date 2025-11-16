@@ -1,45 +1,64 @@
 #!/bin/bash
+# Скрипт для запуска Digital Inspector через Docker Compose
 
-echo "🚀 Starting Digital Inspector..."
-echo "================================"
+set -e
 
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ docker-compose не установлен!"
-    echo "Установите: brew install docker-compose"
+echo "🚀 Digital Inspector - Запуск через Docker Compose"
+echo "=================================================="
+
+# Переход в директорию проекта
+cd "$(dirname "$0")"
+
+# Проверка наличия Docker
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker не установлен!"
+    echo "Установите Docker: https://www.docker.com/get-started"
     exit 1
 fi
 
-if [ ! -f "best.pt" ]; then
-    echo "⚠️  Предупреждение: файл best.pt не найден!"
-    echo "Приложение запустится, но детекция не будет работать."
+# Проверка наличия Docker Compose
+if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    echo "❌ Docker Compose не установлен!"
+    exit 1
 fi
 
-echo "📦 Останавливаем старые контейнеры..."
-docker-compose down 2>/dev/null
+# Проверка наличия моделей
+if [ ! -f "best.pt" ] || [ ! -f "best-4.pt" ]; then
+    echo "❌ Файлы моделей не найдены!"
+    echo "Необходимы файлы: best.pt и best-4.pt"
+    exit 1
+fi
 
-echo "🔨 Собираем Docker образ..."
+echo ""
+echo "📦 Сборка Docker образа..."
 docker-compose build
 
-echo "🚀 Запускаем приложение..."
+echo ""
+echo "🚀 Запуск контейнера..."
 docker-compose up -d
 
 echo ""
-echo "================================"
-echo "✅ Digital Inspector запущен!"
-echo "================================"
-echo ""
-echo "🌐 URL: http://localhost:5002"
-echo "👤 Логин: inspector"
-echo "🔑 Пароль: demo123"
-echo ""
-echo "📊 Проверить статус:"
-echo "   docker-compose ps"
-echo ""
-echo "📝 Посмотреть логи:"
-echo "   docker-compose logs -f"
-echo ""
-echo "🛑 Остановить:"
-echo "   docker-compose down"
-echo ""
-echo "================================"
+echo "⏳ Ожидание запуска приложения..."
+sleep 5
 
+echo ""
+echo "✅ Приложение запущено!"
+echo ""
+echo "📍 Доступно по адресам:"
+echo "   - http://localhost:5002"
+echo "   - http://127.0.0.1:5002"
+echo ""
+echo "👤 Логин по умолчанию:"
+echo "   Username: admin"
+echo "   Password: admin123"
+echo ""
+echo "📊 Команды для управления:"
+echo "   docker-compose logs -f           # Просмотр логов"
+echo "   docker-compose ps                # Статус контейнера"
+echo "   docker-compose stop              # Остановка"
+echo "   docker-compose restart           # Перезапуск"
+echo "   docker-compose down              # Остановка и удаление"
+echo ""
+echo "📝 Логи также доступны в файле: inspector.log"
+echo ""
+echo "🎉 Готово к работе!"

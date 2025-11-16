@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,24 +9,50 @@ env/
 ENV/
 .venv
 
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
 *.log
+inspector.log
+app.log
+
+# Database (will be mounted)
 *.db
 *.db-journal
 
-.git/
-.gitignore
+# Uploaded files (will be mounted)
+uploads/*
+annotated/*
+
+# Documentation
+README.md
+*.md
+
+# Scripts
+*.sh
+launch.py
+start_app.py
+run.sh
+start.sh
+
+# OS files
 .DS_Store
+Thumbs.db
 
-# Exclude mounted volumes (they're in docker-compose.yml)
-uploads/
-annotated/
-best.pt
-
-app_clean.py
-app_inspector_old.py
-cleanup_duplicates.py
-remove_*.py
-
-!requirements.txt
-!DOCKER*.txt
-
+# Test files
+test_*
+*_test.py
