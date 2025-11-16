@@ -8,6 +8,8 @@ import uuid
 import base64
 from datetime import datetime, timedelta
 from functools import wraps
+from multiprocessing import Pool, cpu_count
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, render_template, jsonify, redirect, url_for, session, send_file
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_bytes
@@ -21,6 +23,7 @@ import logging
 from preprocessing import preprocess_for_yolo
 from postprocessing import post_process_detections, calculate_detection_quality_score
 import database as db
+from multiprocessing_worker import process_single_page
 
 logging.basicConfig(
     level=logging.INFO,
@@ -244,6 +247,181 @@ def upload_document():
         if 'document_id' in locals():
             db.update_document_status(document_id, 'failed')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/upload_batch', methods=['POST'])
+@login_required
+def upload_batch_documents():
+    """Upload and process multiple documents with multiprocessing"""
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+    
+    files = request.files.getlist('files')
+    if not files or len(files) == 0:
+        return jsonify({'error': 'No files selected'}), 400
+    
+    user_id = session['user_id']
+    results = []
+    errors = []
+    
+    logger.info(f"📦 Batch upload: {len(files)} files from user {user_id}")
+    
+    for file in files:
+        if file.filename == '':
+            continue
+        
+        if not allowed_file(file.filename):
+            errors.append(f"'{file.filename}': Invalid file type")
+            continue
+        
+        try:
+            original_filename = secure_filename(file.filename)
+            file_ext = original_filename.rsplit('.', 1)[1].lower()
+            unique_filename = f"{uuid.uuid4().hex}.{file_ext}"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            
+            file.save(file_path)
+            file_size = os.path.getsize(file_path)
+            
+            with open(file_path, 'rb') as f:
+                file_bytes = f.read()
+            
+            # Convert to images
+            if file_ext == 'pdf':
+                images = convert_from_bytes(file_bytes, dpi=250)
+                pages_count = len(images)
+            else:
+                images = [Image.open(io.BytesIO(file_bytes))]
+                pages_count = 1
+            
+            # Save document to DB
+            document_id = db.save_document(
+                user_id, unique_filename, original_filename, file_path, file_size, pages_count
+            )
+            
+            logger.info(f"🔄 Processing document {document_id} ({original_filename}) with {pages_count} pages using multiprocessing")
+            
+            # Process pages in parallel with multiprocessing
+            page_results = process_document_parallel(images, document_id, pages_count)
+            
+            db.update_document_status(document_id, 'completed')
+            
+            results.append({
+                'success': True,
+                'document_id': document_id,
+                'filename': original_filename,
+                'pages': pages_count,
+                'results': page_results
+            })
+            
+            logger.info(f"✅ Document {document_id} processed successfully")
+            
+        except Exception as e:
+            error_msg = f"'{file.filename}': {str(e)}"
+            errors.append(error_msg)
+            logger.error(f"❌ Error processing {file.filename}: {str(e)}", exc_info=True)
+            if 'document_id' in locals():
+                db.update_document_status(document_id, 'failed')
+    
+    return jsonify({
+        'success': len(results) > 0,
+        'results': results,
+        'errors': errors,
+        'total_files': len(files),
+        'successful': len(results),
+        'failed': len(errors)
+    })
+
+
+def process_document_parallel(images, document_id, pages_count):
+    """Process document pages in parallel using multiprocessing"""
+    try:
+        # Determine number of workers (max 4 to avoid memory issues)
+        num_workers = min(cpu_count(), 4, pages_count)
+        
+        logger.info(f"🚀 Using {num_workers} workers for {pages_count} pages")
+        
+        # Prepare page data
+        page_tasks = []
+        for page_num, pil_image in enumerate(images):
+            # Convert image to bytes for serialization
+            img_bytes = io.BytesIO()
+            pil_image.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+            
+            page_tasks.append((
+                img_bytes.read(),
+                page_num + 1,
+                model_stamps_path,
+                model_signature_path
+            ))
+        
+        # Process in parallel
+        results = []
+        with Pool(processes=num_workers) as pool:
+            for result in pool.imap(process_single_page, page_tasks):
+                if result['success']:
+                    # Save to database and files
+                    page_num = result['page']
+                    
+                    # Save annotated image
+                    annotated_filename = f"doc_{document_id}_page_{page_num}.png"
+                    annotated_path = os.path.join(app.config['ANNOTATED_FOLDER'], annotated_filename)
+                    with open(annotated_path, 'wb') as f:
+                        f.write(result['annotated_img'])
+                    
+                    # Save original image
+                    original_filename = f"doc_{document_id}_page_{page_num}_original.png"
+                    original_path = os.path.join(app.config['ANNOTATED_FOLDER'], original_filename)
+                    with open(original_path, 'wb') as f:
+                        f.write(result['original_img'])
+                    
+                    # Save detections to DB
+                    for det in result['detections']:
+                        db.save_detection(
+                            document_id, page_num, det['class'], det['confidence'],
+                            det['bbox'], annotated_image_path=annotated_path
+                        )
+                    
+                    # Save QR codes to DB
+                    for qr in result['qr_codes']:
+                        # We need to reconstruct rect from qr_codes data
+                        db.save_detection(
+                            document_id, page_num, 'qr-code', 1.0,
+                            [0, 0, 0, 0],  # bbox not available here
+                            qr_data=qr.get('data', ''),
+                            qr_valid=qr.get('valid', True),
+                            annotated_image_path=annotated_path
+                        )
+                    
+                    # Convert to base64 for response
+                    annotated_base64 = base64.b64encode(result['annotated_img']).decode('utf-8')
+                    original_base64 = base64.b64encode(result['original_img']).decode('utf-8')
+                    
+                    results.append({
+                        'page': page_num,
+                        'image': annotated_base64,
+                        'original_image': original_base64,
+                        'detections': result['detections'],
+                        'qr_codes': result['qr_codes']
+                    })
+                    
+                    logger.info(f"✓ Page {page_num}/{pages_count} processed")
+                else:
+                    logger.error(f"✗ Page {result['page']} failed: {result.get('error')}")
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in parallel processing: {str(e)}", exc_info=True)
+        # Fallback to sequential processing
+        logger.info("Falling back to sequential processing...")
+        results = []
+        for page_num, pil_image in enumerate(images):
+            page_results = process_page(pil_image, document_id, page_num + 1)
+            results.append(page_results)
+        return results
+
 
 def process_page(pil_image, document_id, page_number):
     """Process single page with YOLO detection"""

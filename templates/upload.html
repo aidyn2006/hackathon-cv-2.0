@@ -9,10 +9,15 @@
             <h4 class="mb-4"><i class="bi bi-cloud-upload"></i> Upload Document for Inspection</h4>
             
             <div class="upload-area" id="uploadArea" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 60px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s;">
-                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" hidden>
+                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple hidden>
                 <i class="bi bi-cloud-arrow-up" style="font-size: 56px; color: #64748b;"></i>
-                <h5 class="mt-3 fw-semibold">Upload Document</h5>
-                <p class="text-muted small">Drag and drop file here or click to browse<br>Supported: PDF, PNG, JPG • Maximum size: 50 MB</p>
+                <h5 class="mt-3 fw-semibold">Upload Documents</h5>
+                <p class="text-muted small">Drag and drop files here or click to browse<br>Supported: PDF, PNG, JPG • Maximum size: 50 MB per file<br><strong>💪 Multiple files supported with parallel processing!</strong></p>
+            </div>
+            
+            <div id="selectedFiles" class="mt-3" style="display: none;">
+                <h6>Selected files:</h6>
+                <ul id="filesList" class="list-group"></ul>
             </div>
             
             <div id="uploadProgress" class="mt-4" style="display: none;">
@@ -62,6 +67,10 @@ const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const results = document.getElementById('results');
 const resultsContent = document.getElementById('resultsContent');
+const selectedFiles = document.getElementById('selectedFiles');
+const filesList = document.getElementById('filesList');
+
+let selectedFilesArray = [];
 
 uploadArea.addEventListener('click', () => fileInput.click());
 
@@ -72,41 +81,67 @@ uploadArea.addEventListener('dragover', (e) => {
 });
 
 uploadArea.addEventListener('dragleave', () => {
-    uploadArea.style.borderColor = '#2ecc71';
-    uploadArea.style.background = '#f8f9fa';
+    uploadArea.style.borderColor = '#cbd5e1';
+    uploadArea.style.background = '#f8fafc';
 });
 
 uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
-    uploadArea.style.borderColor = '#2ecc71';
-    uploadArea.style.background = '#f8f9fa';
+    uploadArea.style.borderColor = '#cbd5e1';
+    uploadArea.style.background = '#f8fafc';
     if (e.dataTransfer.files.length > 0) {
-        handleFile(e.dataTransfer.files[0]);
+        handleFiles(Array.from(e.dataTransfer.files));
     }
 });
 
 fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
-        handleFile(e.target.files[0]);
+        handleFiles(Array.from(e.target.files));
     }
 });
 
-function handleFile(file) {
+function handleFiles(files) {
+    selectedFilesArray = files;
+    
+    // Show selected files
+    filesList.innerHTML = '';
+    files.forEach((file, idx) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+            <span><i class="bi bi-file-earmark-pdf"></i> ${file.name}</span>
+            <span class="badge bg-primary rounded-pill">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+        `;
+        filesList.appendChild(li);
+    });
+    
+    selectedFiles.style.display = 'block';
+    
+    // Auto-submit if files selected
+    setTimeout(() => uploadFiles(), 500);
+}
+
+function uploadFiles() {
+    if (selectedFilesArray.length === 0) return;
+    
     const formData = new FormData();
-    formData.append('file', file);
+    selectedFilesArray.forEach(file => {
+        formData.append('files', file);
+    });
     
     uploadProgress.style.display = 'block';
     uploadArea.style.display = 'none';
+    selectedFiles.style.display = 'none';
     
     let progress = 0;
     const progressInterval = setInterval(() => {
-        progress += Math.random() * 10;
+        progress += Math.random() * 5;
         if (progress > 90) progress = 90;
         progressBar.style.width = progress + '%';
-        progressText.textContent = Math.round(progress) + '% - Processing...';
+        progressText.textContent = `${Math.round(progress)}% - Processing ${selectedFilesArray.length} file(s) with multiprocessing...`;
     }, 500);
     
-    fetch('/api/upload', {
+    fetch('/api/upload_batch', {
         method: 'POST',
         body: formData
     })
@@ -120,22 +155,32 @@ function handleFile(file) {
             uploadProgress.style.display = 'none';
             results.style.display = 'block';
             
-            const totalQR = data.results.reduce((sum, p) => sum + p.qr_codes.length, 0);
-            const totalSignatures = data.results.reduce((sum, p) => {
-                return sum + p.detections.filter(d => d.class.toLowerCase().includes('signature')).length;
-            }, 0);
-            const totalStamps = data.results.reduce((sum, p) => {
-                return sum + p.detections.filter(d => d.class.toLowerCase().includes('stamp')).length;
-            }, 0);
+            // Calculate totals across all documents
+            let totalPages = 0;
+            let totalSignatures = 0;
+            let totalStamps = 0;
+            let totalQR = 0;
+            
+            data.results.forEach(doc => {
+                totalPages += doc.pages;
+                doc.results.forEach(page => {
+                    totalSignatures += page.detections.filter(d => d.class.toLowerCase().includes('signature')).length;
+                    totalStamps += page.detections.filter(d => d.class.toLowerCase().includes('stamp')).length;
+                    totalQR += page.qr_codes.length;
+                });
+            });
             
             let html = `<div class="alert alert-success border-0 shadow-sm">
                 <div class="d-flex align-items-center mb-2">
                     <i class="bi bi-check-circle-fill text-success me-2" style="font-size: 20px;"></i>
-                    <strong>Processing Complete</strong>
+                    <strong>🚀 Batch Processing Complete with Multiprocessing!</strong>
                 </div>
                 <div class="row g-2 mt-2">
                     <div class="col-auto">
-                        <span class="badge bg-light text-dark"><i class="bi bi-file-earmark"></i> ${data.results.length} Pages</span>
+                        <span class="badge bg-success"><i class="bi bi-files"></i> ${data.successful} Document(s)</span>
+                    </div>
+                    <div class="col-auto">
+                        <span class="badge bg-light text-dark"><i class="bi bi-file-earmark"></i> ${totalPages} Pages</span>
                     </div>
                     <div class="col-auto">
                         <span class="badge bg-light text-dark"><i class="bi bi-pencil"></i> ${totalSignatures} Signatures</span>
@@ -147,25 +192,31 @@ function handleFile(file) {
                         <span class="badge bg-light text-dark"><i class="bi bi-qr-code"></i> ${totalQR} QR Codes</span>
                     </div>
                 </div>
+                ${data.errors.length > 0 ? `<div class="alert alert-warning mt-2 mb-0"><strong>Errors:</strong> ${data.errors.join(', ')}</div>` : ''}
             </div>`;
             
             resultsContent.innerHTML = html;
             
-            // Show original and processed images side by side
+            // Show results for each document
             let imagesHtml = '';
-            data.results.forEach((page, idx) => {
-                imagesHtml += `
-                    <div class="card mb-4 border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom">
-                            <h6 class="mb-0 text-dark"><i class="bi bi-file-earmark-text"></i> Page ${page.page}</h6>
-                        </div>
-                        <div class="card-body">
+            data.results.forEach((doc, docIdx) => {
+                imagesHtml += `<div class="card mb-4 border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> ${doc.filename}</h5>
+                        <small>${doc.pages} page(s) • Document ID: ${doc.document_id}</small>
+                    </div>
+                    <div class="card-body">`;
+                
+                doc.results.forEach((page, pageIdx) => {
+                    imagesHtml += `
+                        <div class="mb-4 ${pageIdx > 0 ? 'border-top pt-4' : ''}">
+                            <h6 class="text-dark mb-3"><i class="bi bi-file-earmark-text"></i> Page ${page.page}</h6>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-2"><span class="badge bg-light text-dark"><i class="bi bi-file-earmark"></i> Original</span></div>
                                     <img src="data:image/png;base64,${page.original_image}" 
                                          class="img-fluid rounded border" 
-                                         alt="Original Page ${page.page}"
+                                         alt="Original"
                                          style="cursor: zoom-in;"
                                          onclick="window.open(this.src)">
                                 </div>
@@ -173,25 +224,27 @@ function handleFile(file) {
                                     <div class="mb-2"><span class="badge bg-light text-dark"><i class="bi bi-eye"></i> Processed</span></div>
                                     <img src="data:image/png;base64,${page.image}" 
                                          class="img-fluid rounded border" 
-                                         alt="Processed Page ${page.page}"
+                                         alt="Processed"
                                          style="cursor: zoom-in;"
                                          onclick="window.open(this.src)">
                                 </div>
                             </div>
                             <div class="mt-3 d-flex gap-2">
                                 <span class="badge bg-light text-dark">
-                                    <i class="bi bi-pencil"></i> ${page.detections.filter(d => d.class.toLowerCase().includes('signature')).length}
+                                    <i class="bi bi-pencil"></i> ${page.detections.filter(d => d.class.toLowerCase().includes('signature')).length} Signatures
                                 </span>
                                 <span class="badge bg-light text-dark">
-                                    <i class="bi bi-bookmark"></i> ${page.detections.filter(d => d.class.toLowerCase().includes('stamp')).length}
+                                    <i class="bi bi-bookmark"></i> ${page.detections.filter(d => d.class.toLowerCase().includes('stamp')).length} Stamps
                                 </span>
                                 <span class="badge bg-light text-dark">
-                                    <i class="bi bi-qr-code"></i> ${page.qr_codes.length}
+                                    <i class="bi bi-qr-code"></i> ${page.qr_codes.length} QR Codes
                                 </span>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                });
+                
+                imagesHtml += `</div></div>`;
             });
             
             document.getElementById('imagesPreview').innerHTML = imagesHtml;
@@ -199,9 +252,10 @@ function handleFile(file) {
     })
     .catch(error => {
         clearInterval(progressInterval);
-        alert('Error: ' + error.message);
+        alert('Error: ' + error);
         uploadArea.style.display = 'block';
         uploadProgress.style.display = 'none';
+        selectedFiles.style.display = 'none';
     });
 }
 </script>
