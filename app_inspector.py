@@ -252,18 +252,19 @@ def process_page(pil_image, document_id, page_number):
     
     original_img = img_cv.copy()
     
-    preprocessed_img = preprocess_for_yolo(img_cv, target_size=640, fast_mode=True)
+    preprocessed_img = preprocess_for_yolo(img_cv, target_size=960, fast_mode=True)
     
     yolo_results = []
     
     if model_stamps is not None:
         stamps_detections = model_stamps(preprocessed_img, 
-                                        conf=0.20,
-                                        imgsz=640,
+                                        conf=0.15,
+                                        imgsz=960,
                                         iou=0.5,
                                         verbose=False,
-                                        half=True)
+                                        half=False)
         
+        stamps_count = 0
         for detection in stamps_detections:
             boxes = detection.boxes
             for box in boxes:
@@ -277,15 +278,18 @@ def process_page(pil_image, document_id, page_number):
                     'confidence': float(conf),
                     'bbox': [float(x1), float(y1), float(x2), float(y2)]
                 })
+                stamps_count += 1
+        logger.info(f"📌 Stamps model found {stamps_count} objects on page {page_number}")
     
     if model_signature is not None:
         signature_detections = model_signature(preprocessed_img, 
-                                              conf=0.20,
-                                              imgsz=640,
+                                              conf=0.10,
+                                              imgsz=960,
                                               iou=0.5,
                                               verbose=False,
-                                              half=True)
+                                              half=False)
         
+        signature_count = 0
         for detection in signature_detections:
             boxes = detection.boxes
             for box in boxes:
@@ -299,6 +303,9 @@ def process_page(pil_image, document_id, page_number):
                     'confidence': float(conf),
                     'bbox': [float(x1), float(y1), float(x2), float(y2)]
                 })
+                signature_count += 1
+                logger.info(f"✍️ Signature detected: {class_name} (conf: {conf:.3f})")
+        logger.info(f"✍️ Signature model found {signature_count} signatures on page {page_number}")
     
     yolo_results_no_qr = [det for det in yolo_results if 'qr' not in det['class'].lower()]
     
